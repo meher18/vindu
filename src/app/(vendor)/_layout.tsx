@@ -8,18 +8,24 @@ export default function VendorLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Fulfillment',
-          tabBarLabel: 'Fulfillment',
+          title: 'Dashboard',
+          tabBarLabel: 'Home',
+        }}
+      />
+      <Tabs.Screen
+        name="plans"
+        options={{
+          title: 'Meal Plans',
+          tabBarLabel: 'Plans',
         }}
       />
       <Tabs.Screen
         name="ledger"
         options={{
-          title: 'Ledger & Payouts',
+          title: 'Ledger',
           tabBarLabel: 'Ledger',
         }}
       />
     </Tabs>
   );
 }
-
