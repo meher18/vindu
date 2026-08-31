@@ -95,7 +95,10 @@ async function run() {
     await db.query(`DELETE FROM menus WHERE kitchen_id='${kitchenId}'`);
 
     const today = new Date();
-    const fmtDate = (offset) => new Date(Date.now() + offset * 86400000).toISOString().split('T')[0];
+    const fmtDate = (offset) => {
+      const d = new Date(Date.now() + offset * 86400000);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
 
     const menuData = [
       {
