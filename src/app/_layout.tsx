@@ -37,12 +37,16 @@ export default function RootLayout() {
   useEffect(() => {
     if (isLoading) return;
     const inAuth = segments[0] === '(auth)';
-    if (!user && !inAuth) router.replace('/(auth)/login');
-    else if (user && inAuth) {
-      if (role === 'customer') router.replace('/(customer)');
-      else if (role === 'vendor' || role === 'driver') {
-        // Wrong app — sign out with message
+    
+    if (!user && !inAuth) {
+      router.replace('/(auth)/login');
+    } else if (user) {
+      // Role-Based Access Control (RBAC) Hardening
+      if (role === 'vendor' || role === 'driver') {
+        // Vendors and drivers must use the Vindu Partners app
         supabase.auth.signOut();
+      } else if (role === 'customer' && segments[0] !== '(customer)') {
+        router.replace('/(customer)');
       }
     }
   }, [user, isLoading, segments, role]);
