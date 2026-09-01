@@ -28,9 +28,18 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchUserRole = async (userId: string) => {
-    const { data, error } = await supabase.from('profiles').select('role').eq('id', userId).single();
-    if (!error && data) setRole(data.role as any);
+  const fetchUserRole = async (userId: string, retries = 3) => {
+    try {
+      const { data, error } = await supabase.from('profiles').select('role').eq('id', userId).single();
+      if (error) throw error;
+      if (data) setRole(data.role as any);
+    } catch (err: any) {
+      if (retries > 0) {
+        setTimeout(() => fetchUserRole(userId, retries - 1), 500);
+        return;
+      }
+      console.warn("Failed to fetch role after retries:", err.message);
+    }
     setLoading(false);
   };
 
