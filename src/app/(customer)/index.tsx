@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  SafeAreaView, ActivityIndicator, TextInput, Modal, Alert
+  SafeAreaView, ActivityIndicator, TextInput, Modal, Alert, RefreshControl
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -108,10 +108,17 @@ export default function CustomerHome() {
     { label: 'Dinner', value: 'dinner', emoji: '🌙' },
   ];
 
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
+
   return (
     <SafeAreaView style={styles.safe}>
       {/* Profile Completion Modal */}
-      <Modal visible={showProfileModal} animationType="slide" presentationStyle="formSheet">
+      <Modal visible={showProfileModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
           <View style={styles.modalContent}>
             <Text style={styles.modalEmoji}>📍</Text>
@@ -132,26 +139,34 @@ export default function CustomerHome() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Delivery Address</Text>
               <TextInput
-                style={[styles.input, { height: 80 }]}
+                style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
                 value={addressInput}
                 onChangeText={setAddressInput}
-                placeholder="Full address (e.g. Flat 101, Galaxy Apts...)"
+                placeholder="Full apartment/house address with landmarks"
                 multiline
               />
             </View>
 
             <TouchableOpacity 
-              style={styles.primaryBtn} 
+              style={[styles.primaryBtn, { opacity: updateProfile.isPending ? 0.7 : 1 }]}
               onPress={() => updateProfile.mutate()}
               disabled={updateProfile.isPending}
             >
-              {updateProfile.isPending ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryBtnText}>Save Details</Text>}
+              {updateProfile.isPending ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Save Details & Continue</Text>
+              )}
             </TouchableOpacity>
           </View>
         </SafeAreaView>
       </Modal>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={styles.scroll} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF6B35" colors={['#FF6B35']} />}
+      >
         {/* Header */}
         <View style={styles.header}>
           <View>
