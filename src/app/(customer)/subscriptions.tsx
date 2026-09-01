@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -7,7 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 export default function MySubscriptions() {
   const { user } = useAuthStore();
 
-  const { data: subs, isLoading } = useQuery({
+  const { data: subs, isLoading, refetch } = useQuery({
     queryKey: ['my-subs', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -27,13 +27,23 @@ export default function MySubscriptions() {
     enabled: !!user?.id,
   });
 
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Text style={styles.title}>My Plans</Text>
         <Text style={styles.subtitle}>All your active subscriptions</Text>
       </View>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView 
+        contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF6B35" colors={['#FF6B35']} />}
+      >
         {isLoading && <ActivityIndicator style={{ marginTop: 60 }} size="large" color="#FF6B35" />}
 
         {!isLoading && subs?.length === 0 && (

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -8,7 +8,7 @@ export default function WalletScreen() {
   const { user } = useAuthStore();
 
   // Step 1: get the wallet row (which has its own UUID id)
-  const { data: wallet, isLoading: walletLoading } = useQuery({
+  const { data: wallet, isLoading: walletLoading, refetch: refetchWallet } = useQuery({
     queryKey: ['my-wallet', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -23,7 +23,7 @@ export default function WalletScreen() {
   });
 
   // Step 2: use wallet.id (not user.id) to get transactions
-  const { data: transactions, isLoading: txLoading } = useQuery({
+  const { data: transactions, isLoading: txLoading, refetch: refetchTx } = useQuery({
     queryKey: ['my-transactions', wallet?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -40,9 +40,19 @@ export default function WalletScreen() {
 
   const isLoading = walletLoading || txLoading;
 
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([refetchWallet(), refetchTx()]);
+    setRefreshing(false);
+  }, [refetchWallet, refetchTx]);
+
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView 
+        contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF6B35" colors={['#FF6B35']} />}
+      >
         <Text style={styles.title}>Wallet</Text>
 
         {/* Balance Card */}
