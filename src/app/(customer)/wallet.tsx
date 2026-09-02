@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 
 export default function WalletScreen() {
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
 
   // Step 1: get the wallet row (which has its own UUID id)
   const { data: wallet, isLoading: walletLoading, refetch: refetchWallet } = useQuery({
@@ -41,6 +42,19 @@ export default function WalletScreen() {
   const isLoading = walletLoading || txLoading;
 
   const [refreshing, setRefreshing] = useState(false);
+  const topUpWallet = useMutation({
+    mutationFn: async (amount: number) => {
+      const { error } = await supabase.rpc('top_up_wallet', { deposit_amount: amount });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customer-wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-wallet-tx'] });
+      Alert.alert('Success', '₹2000 has been deposited to your wallet.');
+    },
+    onError: (err: any) => Alert.alert('Deposit Failed', err.message)
+  });
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([refetchWallet(), refetchTx()]);
@@ -63,6 +77,13 @@ export default function WalletScreen() {
             : <Text style={styles.balanceAmount}>₹{parseFloat(wallet?.balance || 0).toFixed(2)}</Text>
           }
           <Text style={styles.balanceSub}>Auto-applied on your next subscription payment</Text>
+          <TouchableOpacity 
+            style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 12, borderRadius: 12, marginTop: 20, alignItems: 'center' }}
+            onPress={() => topUpWallet.mutate(2000)}
+            disabled={topUpWallet.isPending}
+          >
+            {topUpWallet.isPending ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 15 }}>+ Add ₹2000 (Simulated Demo)</Text>}
+          </TouchableOpacity>
         </View>
 
         {/* Info Grid */}
