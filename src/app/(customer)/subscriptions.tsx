@@ -1,11 +1,28 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 
 export default function MySubscriptions() {
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  const cancelSub = useMutation({
+    mutationFn: async (subId: string) => {
+      const { data, error } = await supabase.rpc('secure_cancel_subscription', { target_sub_id: subId });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      Alert.alert('Subscription Cancelled', 'Your subscription has been cancelled and any remaining prorated amount has been refunded to your wallet.');
+      queryClient.invalidateQueries({ queryKey: ['my-subs'] });
+      queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    },
+    onError: (err: any) => {
+      Alert.alert('Cancellation Failed', err.message);
+    }
+  });
 
   const { data: subs, isLoading, refetch } = useQuery({
     queryKey: ['my-subs', user?.id],
@@ -90,6 +107,25 @@ export default function MySubscriptions() {
                   <Text style={[styles.detailValue, { color: '#FF6B35' }]}>₹{plan?.price_per_day}/day</Text>
                 </View>
               </View>
+
+              {isActive && (
+                <TouchableOpacity 
+                  style={styles.cancelBtn} 
+                  onPress={() => {
+                    Alert.alert(
+                      'Cancel Subscription?',
+                      'Are you sure you want to cancel? The remaining prorated amount minus any pre-refunded skips will be instantly returned to your wallet.',
+                      [
+                        { text: 'Keep Plan', style: 'cancel' },
+                        { text: 'Cancel Plan', style: 'destructive', onPress: () => cancelSub.mutate(sub.id) }
+                      ]
+                    );
+                  }}
+                  disabled={cancelSub.isPending}
+                >
+                  <Text style={styles.cancelBtnText}>{cancelSub.isPending ? 'Cancelling...' : 'Cancel Subscription'}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           );
         })}
@@ -124,4 +160,6 @@ const styles = StyleSheet.create({
   detailItem: {},
   detailLabel: { fontSize: 11, color: '#9CA3AF', fontWeight: '600', textTransform: 'uppercase', marginBottom: 4 },
   detailValue: { fontSize: 15, fontWeight: '700', color: '#1A1A2E' },
+  cancelBtn: { marginTop: 16, backgroundColor: '#FEF2F2', paddingVertical: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#FEE2E2' },
+  cancelBtnText: { color: '#DC2626', fontSize: 14, fontWeight: '700' }
 });
