@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  SafeAreaView, ActivityIndicator, TextInput, Modal, Alert, RefreshControl
+  SafeAreaView, ActivityIndicator, TextInput, Modal, Alert, RefreshControl,
+  KeyboardAvoidingView, Platform
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -21,6 +22,62 @@ export default function CustomerHome() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
   const [addressInput, setAddressInput] = useState('');
+
+  // Purchase Modal State
+  const [selectedPlan, setSelectedPlan] = useState<any>(null);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [quantity, setQuantity] = useState(1);
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d;
+  });
+
+  // Fetch Wallet Balance
+  const { data: wallet } = useQuery({
+    queryKey: ['my-wallet', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('wallets')
+        .select('id, balance')
+        .eq('customer_id', user!.id)
+        .single();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data || { id: null, balance: 0 };
+    },
+    enabled: !!user?.id,
+  });
+
+  const purchaseSubscription = useMutation({
+    mutationFn: async () => {
+      if (!selectedPlan) throw new Error("No plan selected");
+      const cost = selectedPlan.price_per_day * quantity * 26;
+      if (!wallet || wallet.balance < cost) {
+        throw new Error("Insufficient wallet balance. Please top up your wallet.");
+      }
+      
+      const sd = new Date(startDate);
+      const ed = new Date(sd);
+      ed.setDate(ed.getDate() + 29);
+      
+      const { error } = await supabase.from('customer_subscriptions').insert({
+        customer_id: user!.id,
+        subscription_id: selectedPlan.id,
+        start_date: sd.toISOString().split('T')[0],
+        end_date: ed.toISOString().split('T')[0],
+        quantity: quantity,
+        status: 'active'
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-subscriptions'] });
+      setShowPurchaseModal(false);
+      Alert.alert('Success', 'Subscription purchased successfully!');
+    },
+    onError: (err: any) => Alert.alert('Purchase Failed', err.message)
+  });
 
   // Fetch all active kitchens first, then their plans — correct join direction
   const { data: plans, isLoading, isError, refetch } = useQuery({
@@ -162,6 +219,79 @@ export default function CustomerHome() {
         </SafeAreaView>
       </Modal>
 
+      {/* Purchase Modal */}
+      <Modal visible={showPurchaseModal} animationType="slide" presentationStyle="pageSheet">
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <SafeAreaView style={styles.modalSafe}>
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                <Text style={styles.modalTitle}>Confirm Purchase</Text>
+                <TouchableOpacity onPress={() => setShowPurchaseModal(false)}>
+                  <Text style={{ fontSize: 24, color: '#6B7280' }}>×</Text>
+                </TouchableOpacity>
+              </View>
+
+              {selectedPlan && (
+                <>
+                  <View style={{ backgroundColor: '#F9FAFB', padding: 16, borderRadius: 16, marginBottom: 24 }}>
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: '#1A1A2E' }}>{selectedPlan.kitchen?.name}</Text>
+                    <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 4 }}>{selectedPlan.diet_type.toUpperCase()} • {selectedPlan.slot_name.toUpperCase()}</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#FF6B35', marginTop: 8 }}>₹{selectedPlan.price_per_day} / day</Text>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Quantity</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                      <TouchableOpacity 
+                        style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }}
+                        onPress={() => setQuantity(q => Math.max(1, q - 1))}
+                      >
+                        <Text style={{ fontSize: 20, fontWeight: '700', color: '#374151' }}>-</Text>
+                      </TouchableOpacity>
+                      <Text style={{ fontSize: 18, fontWeight: '700' }}>{quantity}</Text>
+                      <TouchableOpacity 
+                        style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }}
+                        onPress={() => setQuantity(q => Math.min(5, q + 1))}
+                      >
+                        <Text style={{ fontSize: 20, fontWeight: '700', color: '#374151' }}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Duration</Text>
+                    <Text style={{ fontSize: 16, color: '#374151' }}>30 Days</Text>
+                  </View>
+
+                  <View style={{ backgroundColor: '#FFF7F0', padding: 16, borderRadius: 16, marginBottom: 24 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text style={{ fontSize: 15, color: '#6B7280' }}>Wallet Balance</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: '#1A1A2E' }}>₹{wallet?.balance || 0}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text style={{ fontSize: 15, color: '#6B7280' }}>Total Cost (approx 26 days)</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: '#1A1A2E' }}>₹{selectedPlan.price_per_day * quantity * 26}</Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity 
+                    style={[styles.primaryBtn, { opacity: purchaseSubscription.isPending ? 0.7 : 1 }]}
+                    onPress={() => purchaseSubscription.mutate()}
+                    disabled={purchaseSubscription.isPending}
+                  >
+                    {purchaseSubscription.isPending ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <Text style={styles.primaryBtnText}>Confirm Purchase</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </Modal>
+
       <ScrollView 
         contentContainerStyle={styles.scroll} 
         showsVerticalScrollIndicator={false}
@@ -244,14 +374,21 @@ export default function CustomerHome() {
         )}
 
         {/* Plan Cards */}
-        {filtered.map((plan: any) => <PlanCard key={plan.id} plan={plan} />)}
+        {filtered.map((plan: any) => <PlanCard key={plan.id} plan={plan} onSubscribe={() => {
+          setSelectedPlan(plan);
+          setQuantity(1);
+          const d = new Date();
+          d.setDate(d.getDate() + 1);
+          setStartDate(d);
+          setShowPurchaseModal(true);
+        }} />)}
         <View style={{ height: 20 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function PlanCard({ plan }: { plan: any }) {
+function PlanCard({ plan, onSubscribe }: { plan: any, onSubscribe: () => void }) {
   const isVeg = plan.diet_type === 'veg' || plan.diet_type === 'vegan';
   const dietColor = isVeg ? '#16A34A' : '#DC2626';
   const dietBg = isVeg ? '#F0FDF4' : '#FEF2F2';
@@ -276,7 +413,7 @@ function PlanCard({ plan }: { plan: any }) {
         <View style={{ flex: 1 }} />
         <Text style={styles.planPrice}>₹{plan.price_per_day}<Text style={styles.perDay}>/day</Text></Text>
       </View>
-      <TouchableOpacity style={styles.subscribeBtn}>
+      <TouchableOpacity style={styles.subscribeBtn} onPress={onSubscribe}>
         <Text style={styles.subscribeBtnText}>Subscribe →</Text>
       </TouchableOpacity>
     </TouchableOpacity>

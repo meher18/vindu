@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -39,7 +39,8 @@ export default function WalletScreen() {
     enabled: !!wallet?.id,
   });
 
-  const isLoading = walletLoading || txLoading;
+  const txReady = !walletLoading && !!wallet?.id;
+  const isLoading = walletLoading;
 
   const [refreshing, setRefreshing] = useState(false);
   const topUpWallet = useMutation({
@@ -47,10 +48,10 @@ export default function WalletScreen() {
       const { error } = await supabase.rpc('top_up_wallet', { deposit_amount: amount });
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer-wallet'] });
-      queryClient.invalidateQueries({ queryKey: ['customer-wallet-tx'] });
-      Alert.alert('Success', '₹2000 has been deposited to your wallet.');
+    onSuccess: (_, amount) => {
+      queryClient.invalidateQueries({ queryKey: ['my-wallet', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['my-transactions', wallet?.id] });
+      Alert.alert('Success', `₹${amount} has been deposited to your wallet.`);
     },
     onError: (err: any) => Alert.alert('Deposit Failed', err.message)
   });
@@ -60,6 +61,8 @@ export default function WalletScreen() {
     await Promise.all([refetchWallet(), refetchTx()]);
     setRefreshing(false);
   }, [refetchWallet, refetchTx]);
+
+  const TOP_UP_AMOUNTS = [500, 1000, 2000, 5000];
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -77,13 +80,18 @@ export default function WalletScreen() {
             : <Text style={styles.balanceAmount}>₹{parseFloat(wallet?.balance || 0).toFixed(2)}</Text>
           }
           <Text style={styles.balanceSub}>Auto-applied on your next subscription payment</Text>
-          <TouchableOpacity 
-            style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 12, borderRadius: 12, marginTop: 20, alignItems: 'center' }}
-            onPress={() => topUpWallet.mutate(2000)}
-            disabled={topUpWallet.isPending}
-          >
-            {topUpWallet.isPending ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 15 }}>+ Add ₹2000 (Simulated Demo)</Text>}
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
+            {TOP_UP_AMOUNTS.map((amount) => (
+              <TouchableOpacity 
+                key={amount}
+                style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12, alignItems: 'center' }}
+                onPress={() => topUpWallet.mutate(amount)}
+                disabled={topUpWallet.isPending}
+              >
+                <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 14 }}>+ ₹{amount}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         {/* Info Grid */}
@@ -110,9 +118,9 @@ export default function WalletScreen() {
           <Text style={styles.sectionTitle}>Transaction History</Text>
         </View>
 
-        {txLoading && <ActivityIndicator color="#FF6B35" style={{ marginTop: 20 }} />}
+        {txReady && txLoading && <ActivityIndicator color="#FF6B35" style={{ marginTop: 20 }} />}
 
-        {!txLoading && transactions?.length === 0 && (
+        {txReady && !txLoading && transactions?.length === 0 && (
           <View style={styles.emptyTx}>
             <Text style={styles.emptyEmoji}>📋</Text>
             <Text style={styles.emptyTitle}>No Transactions Yet</Text>
