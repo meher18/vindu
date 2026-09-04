@@ -4,6 +4,7 @@ import { Slot, useRouter, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
+import { registerForPushNotifications } from '@/lib/notifications';
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ export default function RootLayout() {
       if (error) throw error;
       if (data && data.role) {
         setRole(data.role as any);
+        registerForPushNotifications(userId).catch(() => {});
         setLoading(false);
         return;
       } else {

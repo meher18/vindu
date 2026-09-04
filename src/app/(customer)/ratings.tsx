@@ -208,3 +208,4 @@ const styles = StyleSheet.create({
   submitBtn: { marginTop: 20, backgroundColor: '#FF6B35', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   submitBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });
+

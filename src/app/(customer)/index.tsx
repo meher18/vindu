@@ -147,6 +147,39 @@ export default function CustomerHome() {
     search === '' || p.kitchen?.name?.toLowerCase().includes(search.toLowerCase())
   ) ?? [];
 
+  // Today's live delivery status
+  const { data: todayDelivery } = useQuery({
+    queryKey: ['today-delivery', user?.id],
+    queryFn: async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const { data: csubs } = await supabase
+        .from('customer_subscriptions')
+        .select('id')
+        .eq('customer_id', user!.id)
+        .eq('status', 'active');
+      if (!csubs || csubs.length === 0) return null;
+      const csIds = csubs.map(c => c.id);
+      const { data } = await supabase
+        .from('deliveries')
+        .select(`
+          id, status, otp_code, vendor_ready_at, qr_scanned_at, delivered_at,
+          customer_subscriptions (
+            subscriptions (
+              slot_name,
+              kitchens ( name )
+            )
+          )
+        `)
+        .in('customer_subscription_id', csIds)
+        .eq('date', today)
+        .neq('status', 'delivered')
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!user?.id,
+    refetchInterval: 30000, // Re-fetch every 30s for live updates
+  });
+
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -307,6 +340,29 @@ export default function CustomerHome() {
             <Text style={styles.avatarText}>{firstName.charAt(0).toUpperCase()}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Live Delivery Status Hero */}
+        {todayDelivery && (
+          <View style={{ backgroundColor: '#FF6B35', borderRadius: 20, padding: 20, marginBottom: 24, shadowColor: '#FF6B35', shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } }}>
+            <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', textTransform: 'uppercase', marginBottom: 4, opacity: 0.9 }}>
+              Today's {todayDelivery.customer_subscriptions?.subscriptions?.slot_name}
+            </Text>
+            <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '800', marginBottom: 16 }}>
+              {todayDelivery.status === 'vendor_ready' ? 'Ready for pickup' :
+               todayDelivery.status === 'picked_up' ? 'Driver is on the way! 🛵' :
+               'Being prepared 👨‍🍳'}
+            </Text>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 16, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Text style={{ fontSize: 28 }}>📦</Text>
+              <View>
+                <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 16 }}>{todayDelivery.customer_subscriptions?.subscriptions?.kitchens?.name}</Text>
+                {todayDelivery.otp_code && (
+                  <Text style={{ color: '#FFF', fontSize: 14, marginTop: 4, fontWeight: '600' }}>Delivery OTP: {todayDelivery.otp_code}</Text>
+                )}
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Search */}
         <View style={styles.searchWrap}>

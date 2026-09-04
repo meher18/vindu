@@ -8,3 +8,4 @@ SELECT cron.schedule(
   '30 18 * * *',                  -- 18:30 UTC = 00:00 IST
   $$ SELECT generate_daily_deliveries(CURRENT_DATE + INTERVAL '1 day'); $$
 );
+

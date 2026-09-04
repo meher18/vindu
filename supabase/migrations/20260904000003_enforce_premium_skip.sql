@@ -28,3 +28,4 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER enforce_premium_before_skip
   BEFORE INSERT ON skips
   FOR EACH ROW EXECUTE PROCEDURE enforce_premium_skip();
+
