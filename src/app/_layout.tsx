@@ -28,19 +28,26 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchUserRole = async (userId: string, retries = 3) => {
+  const fetchUserRole = async (userId: string, retries = 5) => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase.from('profiles').select('role').eq('id', userId).single();
+      const { data, error } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
       if (error) throw error;
-      if (data) setRole(data.role as any);
+      if (data && data.role) {
+        setRole(data.role as any);
+        setLoading(false);
+        return;
+      } else {
+        throw new Error('Profile not ready');
+      }
     } catch (err: any) {
       if (retries > 0) {
-        setTimeout(() => fetchUserRole(userId, retries - 1), 500);
+        setTimeout(() => fetchUserRole(userId, retries - 1), 1000);
         return;
       }
       console.warn("Failed to fetch role after retries:", err.message);
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
