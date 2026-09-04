@@ -11,3 +11,4 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Make it accessible to anon
 GRANT EXECUTE ON FUNCTION public.dev_confirm_email(text) TO anon;
 GRANT EXECUTE ON FUNCTION public.dev_confirm_email(text) TO authenticated;
+
