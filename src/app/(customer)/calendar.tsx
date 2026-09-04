@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Act
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
+import { Calendar } from 'react-native-calendars';
 
 const generateCalendarDays = (year: number, month: number) => {
   const firstDay = new Date(year, month, 1).getDay();
@@ -247,63 +248,77 @@ export default function CalendarScreen() {
     });
   };
 
+  // Generate marked dates for react-native-calendars
+  const markedDates: any = {};
+  if (selectedDate) {
+    const dStr = selectedDate.toISOString().split('T')[0];
+    markedDates[dStr] = { selected: true, selectedColor: '#FF6B35' };
+  }
+
+  // Iterate through all days of the current month to add dots
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  for (let i = 1; i <= daysInMonth; i++) {
+    const dStr = new Date(Date.UTC(year, month, i)).toISOString().split('T')[0];
+    const status = getDayStatus(i);
+    const dotColor = getDotColor(status);
+    
+    if (dotColor !== 'transparent') {
+      if (!markedDates[dStr]) markedDates[dStr] = {};
+      markedDates[dStr].marked = true;
+      markedDates[dStr].dotColor = dotColor;
+    }
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handlePrevMonth} style={styles.arrowButton}>
-          <Text style={styles.arrowText}>{"<"}</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{monthNames[month]} {year}</Text>
-        <TouchableOpacity onPress={handleNextMonth} style={styles.arrowButton}>
-          <Text style={styles.arrowText}>{">"}</Text>
-        </TouchableOpacity>
-      </View>
-
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} />
+          <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor="#FF6B35" />
         }
       >
         <View style={styles.calendarCard}>
-          <View style={styles.weekRow}>
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-              <Text key={`wk-${i}`} style={styles.weekText}>{day}</Text>
-            ))}
-          </View>
-          
-          <View style={styles.daysGrid}>
-            {calendarDays.map((day, index) => {
-              const status = getDayStatus(day);
-              const isSelected = day && selectedDate && 
-                               selectedDate.getDate() === day && 
-                               selectedDate.getMonth() === month && 
-                               selectedDate.getFullYear() === year;
-
-              return (
-                <TouchableOpacity 
-                  key={`day-${index}`} 
-                  style={[styles.dayCell, isSelected && styles.selectedDayCell]}
-                  onPress={() => day && setSelectedDate(new Date(year, month, day))}
-                  disabled={!day}
-                >
-                  <Text style={[styles.dayText, !day && styles.emptyDayText]}>{day || ''}</Text>
-                  {day && (
-                    <View style={[styles.dot, { backgroundColor: getDotColor(status) }]} />
-                  )}
-                </TouchableOpacity>
-              )
-            })}
-          </View>
+          <Calendar
+            current={new Date(year, month, 1).toISOString().split('T')[0]}
+            onDayPress={(day: any) => setSelectedDate(new Date(day.timestamp))}
+            onMonthChange={(monthData: any) => {
+              setMonth(monthData.month - 1);
+              setYear(monthData.year);
+            }}
+            markedDates={markedDates}
+            theme={{
+              backgroundColor: '#ffffff',
+              calendarBackground: '#ffffff',
+              textSectionTitleColor: '#b6c1cd',
+              selectedDayBackgroundColor: '#FF6B35',
+              selectedDayTextColor: '#ffffff',
+              todayTextColor: '#FF6B35',
+              dayTextColor: '#2d4150',
+              textDisabledColor: '#d9e1e8',
+              dotColor: '#FF6B35',
+              selectedDotColor: '#ffffff',
+              arrowColor: '#FF6B35',
+              monthTextColor: '#1A1A2E',
+              indicatorColor: '#FF6B35',
+              textDayFontWeight: '500',
+              textMonthFontWeight: 'bold',
+              textDayHeaderFontWeight: '600',
+              textDayFontSize: 16,
+              textMonthFontSize: 18,
+              textDayHeaderFontSize: 14
+            }}
+          />
         </View>
 
         {isLoading ? (
           <ActivityIndicator size="large" color="#FF6B35" style={{ marginTop: 20 }} />
         ) : (
           <View style={styles.detailsContainer}>
-            <Text style={styles.detailsHeader}>
-              Details for {selectedDate ? selectedDate.toDateString() : 'None'}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={styles.detailsHeader}>
+                {selectedDate ? selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : 'Select a date'}
+              </Text>
+            </View>
             {renderSelectedDateDetails()}
           </View>
         )}
@@ -315,127 +330,64 @@ export default function CalendarScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF7F0',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  arrowButton: {
-    padding: 10,
-  },
-  arrowText: {
-    fontSize: 24,
-    color: '#FF6B35',
+    backgroundColor: '#F9FAFB',
   },
   scrollContent: {
     padding: 16,
   },
   calendarCard: {
     backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: 24,
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
-    shadowRadius: 10,
+    shadowRadius: 12,
     elevation: 3,
-  },
-  weekRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 10,
-  },
-  weekText: {
-    width: 40,
-    textAlign: 'center',
-    fontWeight: '600',
-    color: '#666',
-  },
-  daysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  dayCell: {
-    width: '14.28%',
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 5,
-    borderRadius: 10,
-  },
-  selectedDayCell: {
-    backgroundColor: '#FFF0E5',
-  },
-  dayText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  emptyDayText: {
-    color: 'transparent',
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 2,
+    marginBottom: 24,
   },
   detailsContainer: {
-    marginTop: 24,
+    paddingBottom: 40,
   },
   detailsHeader: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1A1A2E',
   },
   detailCard: {
     backgroundColor: '#FFF',
     borderRadius: 20,
-    padding: 16,
-    marginBottom: 12,
+    padding: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F3F4F6'
   },
   detailTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  detailText: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1A1A2E',
     marginBottom: 4,
   },
+  detailText: {
+    fontSize: 15,
+    color: '#6B7280',
+    marginBottom: 6,
+    fontWeight: '500'
+  },
   badgeContainer: {
-    marginTop: 8,
     alignSelf: 'flex-start',
-    backgroundColor: '#FFE5E5',
+    backgroundColor: '#FEE2E2',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 20,
+    marginTop: 8,
   },
   skippedBadge: {
-    color: 'red',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  skipButton: {
-    marginTop: 12,
-    backgroundColor: '#FFF0E5',
-    paddingVertical: 10,
-    borderRadius: 12,
     alignItems: 'center',
   },
   skipButtonText: {
