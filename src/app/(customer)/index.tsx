@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { getISTDateString } from '@/utils/dateUtils';
 
 type DietFilter = 'all' | 'veg' | 'non-veg' | 'vegan';
 type SlotFilter = 'all' | 'breakfast' | 'lunch' | 'dinner';
@@ -66,8 +67,8 @@ export default function CustomerHome() {
       const { error } = await supabase.from('customer_subscriptions').insert({
         customer_id: user!.id,
         subscription_id: selectedPlan.id,
-        start_date: sd.toISOString().split('T')[0],
-        end_date: ed.toISOString().split('T')[0],
+        start_date: getISTDateString(sd),
+        end_date: getISTDateString(ed),
         quantity: quantity,
         status: 'active'
       });
@@ -170,7 +171,7 @@ export default function CustomerHome() {
   const { data: todayDelivery } = useQuery({
     queryKey: ['today-delivery', user?.id],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getISTDateString();
       const { data: csubs } = await supabase
         .from('customer_subscriptions')
         .select('id')
@@ -181,7 +182,8 @@ export default function CustomerHome() {
       const { data } = await supabase
         .from('deliveries')
         .select(`
-          id, status, otp_code, vendor_ready_at, qr_scanned_at, delivered_at,
+          id, status, vendor_ready_at, qr_scanned_at, delivered_at,
+          delivery_secrets ( otp_code ),
           customer_subscriptions (
             subscriptions (
               slot_name,
@@ -399,8 +401,8 @@ export default function CustomerHome() {
               <Text style={{ fontSize: 28 }}>📦</Text>
               <View>
                 <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 16 }}>{todayDelivery.customer_subscriptions?.subscriptions?.kitchens?.name}</Text>
-                {todayDelivery.otp_code && (
-                  <Text style={{ color: '#FFF', fontSize: 14, marginTop: 4, fontWeight: '600' }}>Delivery OTP: {todayDelivery.otp_code}</Text>
+                {todayDelivery.delivery_secrets?.[0]?.otp_code && (
+                  <Text style={{ color: '#FFF', fontSize: 14, marginTop: 4, fontWeight: '600' }}>Delivery OTP: {todayDelivery.delivery_secrets[0].otp_code}</Text>
                 )}
               </View>
             </View>

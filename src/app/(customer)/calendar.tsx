@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { Calendar } from 'react-native-calendars';
+import { getISTDateString } from '@/utils/dateUtils';
 
 const generateCalendarDays = (year: number, month: number) => {
   const firstDay = new Date(year, month, 1).getDay();
@@ -52,8 +53,8 @@ export default function CalendarScreen() {
 
   const hasPremium = customerSubscriptions?.some((cs: any) => cs.premium_unlocked === true) ?? false;
 
-  const startDateStr = new Date(year, month, 1).toISOString();
-  const endDateStr = new Date(year, month + 1, 0).toISOString();
+  const startDateStr = getISTDateString(new Date(year, month, 1));
+  const endDateStr = getISTDateString(new Date(year, month + 1, 0));
 
   const subIds = customerSubscriptions?.map((sub: any) => sub.id) || [];
 
@@ -63,7 +64,7 @@ export default function CalendarScreen() {
       if (subIds.length === 0) return [];
       const { data, error } = await supabase
         .from('deliveries')
-        .select('*')
+        .select('*, delivery_secrets(otp_code)')
         .in('customer_subscription_id', subIds)
         .gte('date', startDateStr)
         .lte('date', endDateStr);
@@ -122,6 +123,15 @@ export default function CalendarScreen() {
   });
 
   const handleSkip = (customer_subscription_id: string, date: string, price_per_day: number) => {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (date === getISTDateString(tomorrow) && today.getHours() >= 20) {
+      Alert.alert('Skip deadline missed', 'Skip deadline missed (8 PM)');
+      return;
+    }
+
     Alert.alert(
       'Skip Delivery',
       'Are you sure you want to skip delivery for this day?',
@@ -142,7 +152,7 @@ export default function CalendarScreen() {
 
   const getDayStatus = (day: number) => {
     if (!day) return null;
-    const dateStr = new Date(Date.UTC(year, month, day)).toISOString().split('T')[0];
+    const dateStr = getISTDateString(new Date(year, month, day));
     
     // Check skips
     const skip = skips?.find((s: any) => s.date.startsWith(dateStr));
@@ -164,7 +174,7 @@ export default function CalendarScreen() {
     });
 
     if (isOperatingDay) {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getISTDateString();
       if (dateStr < todayStr) return 'missed';
       return 'scheduled';
     }
@@ -193,8 +203,8 @@ export default function CalendarScreen() {
       );
     }
 
-    const dateStr = new Date(Date.UTC(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())).toISOString().split('T')[0];
-    const todayStr = new Date().toISOString().split('T')[0];
+    const dateStr = getISTDateString(selectedDate);
+    const todayStr = getISTDateString();
     
     return customerSubscriptions?.map((cs: any) => {
       const sub = cs.subscriptions;
@@ -219,8 +229,8 @@ export default function CalendarScreen() {
           ) : delivery ? (
             <View>
               <Text style={styles.detailText}>Status: {delivery.status}</Text>
-              {dateStr === todayStr && delivery.otp_code && (
-                <Text style={styles.detailText}>OTP: {delivery.otp_code}</Text>
+              {dateStr === todayStr && delivery.delivery_secrets?.[0]?.otp_code && (
+                <Text style={styles.detailText}>OTP: {delivery.delivery_secrets[0].otp_code}</Text>
               )}
             </View>
           ) : dateStr >= todayStr ? (

@@ -35,7 +35,7 @@ export default function RatingsScreen() {
       const { data, error } = await supabase
         .from('deliveries')
         .select(`
-          id, date, delivered_at, otp_code,
+          id, date, delivered_at,
           customer_subscriptions!inner (
             customer_id,
             subscription_id,
