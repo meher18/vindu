@@ -7,12 +7,15 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 type DietFilter = 'all' | 'veg' | 'non-veg' | 'vegan';
 type SlotFilter = 'all' | 'breakfast' | 'lunch' | 'dinner';
 
 export default function CustomerHome() {
   const { user } = useAuthStore();
+  const router = useRouter();
+  const { purchasePlanId } = useLocalSearchParams();
   const queryClient = useQueryClient();
   const [dietFilter, setDietFilter] = useState<DietFilter>('all');
   const [slotFilter, setSlotFilter] = useState<SlotFilter>('all');
@@ -113,14 +116,29 @@ export default function CustomerHome() {
   const { data: profile } = useQuery({
     queryKey: ['my-profile', user?.id],
     queryFn: async () => {
-      const { data } = await supabase.from('profiles').select('full_name, phone, delivery_address').eq('id', user!.id).single();
+      const { data } = await supabase.from('profiles').select('full_name, phone, delivery_address, pin_code').eq('id', user!.id).single();
       return data;
     },
     enabled: !!user?.id,
   });
 
   useEffect(() => {
-    if (profile && (!profile.phone || !profile.delivery_address)) {
+    if (purchasePlanId && plans) {
+      const planToBuy = plans.find((p: any) => p.id === purchasePlanId);
+      if (planToBuy) {
+        setSelectedPlan(planToBuy);
+        setQuantity(1);
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        setStartDate(d);
+        setShowPurchaseModal(true);
+        router.setParams({ purchasePlanId: '' }); // clear it
+      }
+    }
+  }, [purchasePlanId, plans]);
+
+  useEffect(() => {
+    if (profile && (!profile.phone || !profile.delivery_address || !profile.pin_code)) {
       setShowProfileModal(true);
     } else {
       setShowProfileModal(false);
@@ -129,10 +147,11 @@ export default function CustomerHome() {
 
   const updateProfile = useMutation({
     mutationFn: async () => {
-      if (!phoneInput || !addressInput) throw new Error("Please fill in both fields");
+      if (!phoneInput || !addressInput || !pinInput) throw new Error("Please fill in all fields");
       const { error } = await supabase.from('profiles').update({
         phone: phoneInput,
-        delivery_address: addressInput
+        delivery_address: addressInput,
+        pin_code: pinInput
       }).eq('id', user!.id);
       if (error) throw error;
     },
@@ -166,6 +185,7 @@ export default function CustomerHome() {
           customer_subscriptions (
             subscriptions (
               slot_name,
+              delivery_type,
               kitchens ( name )
             )
           )
@@ -179,6 +199,19 @@ export default function CustomerHome() {
     enabled: !!user?.id,
     refetchInterval: 30000, // Re-fetch every 30s for live updates
   });
+
+  const isTakeaway = todayDelivery?.customer_subscriptions?.subscriptions?.delivery_type === 'takeaway';
+
+  const getHeroTitle = () => {
+    if (!todayDelivery) return '';
+    if (todayDelivery.status === 'vendor_ready') {
+      return isTakeaway ? 'Ready for you to pick up! 🚶' : 'Ready for driver pickup';
+    }
+    if (todayDelivery.status === 'picked_up') {
+      return isTakeaway ? 'Enjoy your meal! 🍽️' : 'Driver is on the way! 🛵';
+    }
+    return 'Being prepared 👨‍🍳';
+  };
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
   const hour = new Date().getHours();
@@ -234,6 +267,18 @@ export default function CustomerHome() {
                 onChangeText={setAddressInput}
                 placeholder="Full apartment/house address with landmarks"
                 multiline
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Pin Code</Text>
+              <TextInput
+                style={styles.input}
+                value={pinInput}
+                onChangeText={setPinInput}
+                placeholder="e.g. 500081"
+                keyboardType="number-pad"
+                maxLength={6}
               />
             </View>
 
@@ -348,9 +393,7 @@ export default function CustomerHome() {
               Today's {todayDelivery.customer_subscriptions?.subscriptions?.slot_name}
             </Text>
             <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '800', marginBottom: 16 }}>
-              {todayDelivery.status === 'vendor_ready' ? 'Ready for pickup' :
-               todayDelivery.status === 'picked_up' ? 'Driver is on the way! 🛵' :
-               'Being prepared 👨‍🍳'}
+              {getHeroTitle()}
             </Text>
             <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 16, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Text style={{ fontSize: 28 }}>📦</Text>
@@ -430,13 +473,8 @@ export default function CustomerHome() {
         )}
 
         {/* Plan Cards */}
-        {filtered.map((plan: any) => <PlanCard key={plan.id} plan={plan} onSubscribe={() => {
-          setSelectedPlan(plan);
-          setQuantity(1);
-          const d = new Date();
-          d.setDate(d.getDate() + 1);
-          setStartDate(d);
-          setShowPurchaseModal(true);
+        {filtered.map((plan: any) => <PlanCard key={plan.id} plan={plan} profile={profile} onSubscribe={() => {
+          router.navigate(`/(customer)/plan/${plan.id}`);
         }} />)}
         <View style={{ height: 20 }} />
       </ScrollView>
@@ -444,7 +482,7 @@ export default function CustomerHome() {
   );
 }
 
-function PlanCard({ plan, onSubscribe }: { plan: any, onSubscribe: () => void }) {
+function PlanCard({ plan, profile, onSubscribe }: { plan: any, profile: any, onSubscribe: () => void }) {
   const isVeg = plan.diet_type === 'veg' || plan.diet_type === 'vegan';
   const dietColor = isVeg ? '#16A34A' : '#DC2626';
   const dietBg = isVeg ? '#F0FDF4' : '#FEF2F2';
@@ -463,6 +501,12 @@ function PlanCard({ plan, onSubscribe }: { plan: any, onSubscribe: () => void })
         </View>
       </View>
       <View style={styles.divider} />
+      <View style={{ marginBottom: 12 }}>
+        <Text style={{ fontSize: 13, color: '#6B7280', fontWeight: '500' }}>
+          {plan.delivery_type === 'takeaway' ? '🚶 Takeaway Pickup' : '🛵 Est. Delivery'} ~{plan.slot_target_time?.slice(0, 5)}
+        </Text>
+        <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>⚠️ Exact time may vary ±15 min</Text>
+      </View>
       <View style={styles.planCardFooter}>
         <View style={styles.footerChip}><Text style={styles.footerChipText}>{slotEmoji} {plan.slot_name.toUpperCase()}</Text></View>
         <View style={styles.footerChip}><Text style={styles.footerChipText}>🕐 {plan.slot_target_time?.slice(0, 5)}</Text></View>
@@ -470,7 +514,7 @@ function PlanCard({ plan, onSubscribe }: { plan: any, onSubscribe: () => void })
         <Text style={styles.planPrice}>₹{plan.price_per_day}<Text style={styles.perDay}>/day</Text></Text>
       </View>
       <TouchableOpacity style={styles.subscribeBtn} onPress={onSubscribe}>
-        <Text style={styles.subscribeBtnText}>Subscribe →</Text>
+        <Text style={styles.subscribeBtnText}>View Menu & Subscribe →</Text>
       </TouchableOpacity>
     </TouchableOpacity>
   );
