@@ -26,6 +26,7 @@ export default function CustomerHome() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
   const [addressInput, setAddressInput] = useState('');
+  const [pinInput, setPinInput] = useState('');
 
   // Purchase Modal State
   const [selectedPlan, setSelectedPlan] = useState<any>(null);

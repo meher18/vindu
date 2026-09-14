@@ -261,14 +261,14 @@ export default function CalendarScreen() {
   // Generate marked dates for react-native-calendars
   const markedDates: any = {};
   if (selectedDate) {
-    const dStr = selectedDate.toISOString().split('T')[0];
+    const dStr = getISTDateString(selectedDate);
     markedDates[dStr] = { selected: true, selectedColor: '#FF6B35' };
   }
 
   // Iterate through all days of the current month to add dots
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   for (let i = 1; i <= daysInMonth; i++) {
-    const dStr = new Date(Date.UTC(year, month, i)).toISOString().split('T')[0];
+    const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
     const status = getDayStatus(i);
     const dotColor = getDotColor(status);
     
@@ -289,7 +289,7 @@ export default function CalendarScreen() {
       >
         <View style={styles.calendarCard}>
           <Calendar
-            current={new Date(year, month, 1).toISOString().split('T')[0]}
+            current={`${year}-${String(month + 1).padStart(2, '0')}-01`}
             onDayPress={(day: any) => setSelectedDate(new Date(day.timestamp))}
             onMonthChange={(monthData: any) => {
               setMonth(monthData.month - 1);
