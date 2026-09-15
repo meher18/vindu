@@ -17,16 +17,21 @@ export default function LoginScreen() {
       Alert.alert('Missing fields', 'Please enter your email and password.');
       return;
     }
-    setLoading(true);
-    if (isSignUp) {
-      const { data: { session }, error } = await supabase.auth.signUp({ email, password });
-      if (error) Alert.alert('Sign Up Failed', error.message);
-      else if (!session) Alert.alert('Verify Email', 'Check your inbox to confirm your account.');
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) Alert.alert('Login Failed', error.message);
+    try {
+      setLoading(true);
+      if (isSignUp) {
+        const { data: { session }, error } = await supabase.auth.signUp({ email, password });
+        if (error) Alert.alert('Sign Up Failed', error.message);
+        else if (!session) Alert.alert('Verify Email', 'Check your inbox to confirm your account.');
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) Alert.alert('Login Failed', error.message);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'An unexpected error occurred.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (

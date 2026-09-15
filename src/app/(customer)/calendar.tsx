@@ -169,6 +169,7 @@ export default function CalendarScreen() {
     const dayOfWeek = new Date(year, month, day).getDay();
     const isOperatingDay = customerSubscriptions?.some((cs: any) => {
       const sub = cs.subscriptions;
+      if (dateStr < cs.start_date || dateStr > cs.end_date) return false;
       const daysMap = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
       return sub?.operating_days?.includes(daysMap[dayOfWeek]);
     });
@@ -213,7 +214,8 @@ export default function CalendarScreen() {
       
       const dayOfWeek = selectedDate.getDay();
       const daysMap = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      const isOperatingDay = sub?.operating_days?.includes(daysMap[dayOfWeek]);
+      const isWithinWindow = dateStr >= cs.start_date && dateStr <= cs.end_date;
+      const isOperatingDay = isWithinWindow && sub?.operating_days?.includes(daysMap[dayOfWeek]);
 
       if (!isOperatingDay) return null;
 

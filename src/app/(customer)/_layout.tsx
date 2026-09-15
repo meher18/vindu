@@ -24,6 +24,7 @@ export default function CustomerLayout() {
       <Tabs.Screen name="calendar" options={{ title: 'Calendar', tabBarLabel: 'Calendar', tabBarIcon: ({ color }) => <TabIcon emoji="📅" color={color} /> }} />
       <Tabs.Screen name="wallet" options={{ title: 'Wallet', tabBarLabel: 'Wallet', tabBarIcon: ({ color }) => <TabIcon emoji="💰" color={color} /> }} />
       <Tabs.Screen name="ratings" options={{ title: 'Rate', tabBarLabel: 'Rate', tabBarIcon: ({ color }) => <TabIcon emoji="⭐" color={color} /> }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarLabel: 'Profile', tabBarIcon: ({ color }) => <TabIcon emoji="👤" color={color} /> }} />
     </Tabs>
   );
 }

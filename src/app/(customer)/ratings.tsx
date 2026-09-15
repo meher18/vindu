@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, RefreshControl } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -26,7 +26,7 @@ export default function RatingsScreen() {
   const [activeDelivery, setActiveDelivery] = useState<any>(null);
 
   // Fetch deliveries that were completed in the last 24h and have NOT been rated yet
-  const { data: pendingRatings, isLoading } = useQuery({
+  const { data: pendingRatings, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['pending-ratings', user?.id],
     queryFn: async () => {
       const since = new Date();
@@ -111,7 +111,10 @@ export default function RatingsScreen() {
         <Text style={styles.subtitle}>Help improve your kitchen partners</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView 
+        contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6B35" />}
+      >
         {!pendingRatings || pendingRatings.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>⭐</Text>

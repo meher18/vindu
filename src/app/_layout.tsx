@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,6 +9,7 @@ import { registerForPushNotifications } from '@/lib/notifications';
 const queryClient = new QueryClient();
 
 export default function RootLayout() {
+  const retryTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { setUser, setRole, setLoading, user, isLoading, role } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
@@ -26,7 +27,10 @@ export default function RootLayout() {
       else { setRole(null); setLoading(false); }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      if (retryTimeout.current) clearTimeout(retryTimeout.current);
+    };
   }, []);
 
   const fetchUserRole = async (userId: string, retries = 5) => {
@@ -44,7 +48,7 @@ export default function RootLayout() {
       }
     } catch (err: any) {
       if (retries > 0) {
-        setTimeout(() => fetchUserRole(userId, retries - 1), 1000);
+        retryTimeout.current = setTimeout(() => fetchUserRole(userId, retries - 1), 1000);
         return;
       }
       console.warn("Failed to fetch role after retries:", err.message);
