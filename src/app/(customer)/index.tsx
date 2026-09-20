@@ -9,9 +9,13 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getISTDateString } from '@/utils/dateUtils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type DietFilter = 'all' | 'veg' | 'non-veg' | 'vegan';
 type SlotFilter = 'all' | 'breakfast' | 'lunch' | 'dinner';
+type DurationFilter = 'all' | 'daily' | 'weekly' | 'monthly';
+type DeliveryFilter = 'all' | 'home_delivery' | 'takeaway';
+type SortOption = 'newest' | 'price_asc' | 'price_desc';
 
 export default function CustomerHome() {
   const { user } = useAuthStore();
@@ -21,6 +25,25 @@ export default function CustomerHome() {
   const [dietFilter, setDietFilter] = useState<DietFilter>('all');
   const [slotFilter, setSlotFilter] = useState<SlotFilter>('all');
   const [search, setSearch] = useState('');
+  const [durationFilter, setDurationFilter] = useState<DurationFilter>('all');
+  const [deliveryFilter, setDeliveryFilter] = useState<DeliveryFilter>('all');
+  const [sortOption, setSortOption] = useState<SortOption>('newest');
+  const [showFavourites, setShowFavourites] = useState(false);
+  const [favourites, setFavourites] = useState<string[]>([]);
+  
+  useEffect(() => {
+    AsyncStorage.getItem('vindu_favourites').then(val => {
+      if (val) setFavourites(JSON.parse(val));
+    });
+  }, []);
+
+  const toggleFavourite = async (planId: string) => {
+    const newFavs = favourites.includes(planId)
+      ? favourites.filter(id => id !== planId)
+      : [...favourites, planId];
+    setFavourites(newFavs);
+    await AsyncStorage.setItem('vindu_favourites', JSON.stringify(newFavs));
+  };
 
   // Profile completion state
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -86,7 +109,7 @@ export default function CustomerHome() {
 
   // Fetch all active kitchens first, then their plans — correct join direction
   const { data: plans, isLoading, isError, refetch } = useQuery({
-    queryKey: ['discover-plans', dietFilter, slotFilter],
+    queryKey: ['discover-plans', dietFilter, slotFilter, durationFilter, deliveryFilter, sortOption],
     queryFn: async () => {
       const { data: kitchens, error: kErr } = await supabase
         .from('kitchens')
@@ -100,12 +123,18 @@ export default function CustomerHome() {
 
       let query = supabase
         .from('subscriptions')
-        .select('id, diet_type, slot_name, price_per_day, capacity, slot_target_time, kitchen_id')
+        .select('id, diet_type, slot_name, price_per_day, capacity, slot_target_time, kitchen_id, duration_type, delivery_type, created_at')
         .eq('status', 'active')
         .in('kitchen_id', kitchenIds);
 
       if (dietFilter !== 'all') query = query.eq('diet_type', dietFilter);
       if (slotFilter !== 'all') query = query.eq('slot_name', slotFilter);
+      if (durationFilter !== 'all') query = query.eq('duration_type', durationFilter);
+      if (deliveryFilter !== 'all') query = query.eq('delivery_type', deliveryFilter);
+      
+      if (sortOption === 'price_asc') query = query.order('price_per_day', { ascending: true });
+      else if (sortOption === 'price_desc') query = query.order('price_per_day', { ascending: false });
+      else if (sortOption === 'newest') query = query.order('created_at', { ascending: false });
 
       const { data: subs, error: sErr } = await query;
       if (sErr) throw sErr;
@@ -164,9 +193,12 @@ export default function CustomerHome() {
     onError: (err: any) => Alert.alert('Error', err.message)
   });
 
-  const filtered = plans?.filter((p: any) =>
+  let filtered = plans?.filter((p: any) =>
     search === '' || p.kitchen?.name?.toLowerCase().includes(search.toLowerCase())
   ) ?? [];
+  if (showFavourites) {
+    filtered = filtered.filter((p: any) => favourites.includes(p.id));
+  }
 
   // Today's live delivery status
   const { data: todayDelivery } = useQuery({
@@ -232,6 +264,25 @@ export default function CustomerHome() {
     { label: 'Breakfast', value: 'breakfast', emoji: '☀️' },
     { label: 'Lunch', value: 'lunch', emoji: '🌤️' },
     { label: 'Dinner', value: 'dinner', emoji: '🌙' },
+  ];
+  
+  const durationTabs: { label: string; value: DurationFilter; emoji: string }[] = [
+    { label: 'All Durations', value: 'all', emoji: '📅' },
+    { label: 'Daily', value: 'daily', emoji: '1️⃣' },
+    { label: 'Weekly', value: 'weekly', emoji: '7️⃣' },
+    { label: 'Monthly', value: 'monthly', emoji: '3️⃣' },
+  ];
+
+  const deliveryTabs: { label: string; value: DeliveryFilter; emoji: string }[] = [
+    { label: 'All Delivery', value: 'all', emoji: '🚚' },
+    { label: 'Home Delivery', value: 'home_delivery', emoji: '🛵' },
+    { label: 'Takeaway', value: 'takeaway', emoji: '🚶' },
+  ];
+  
+  const sortTabs: { label: string; value: SortOption; emoji: string }[] = [
+    { label: 'Newest', value: 'newest', emoji: '✨' },
+    { label: 'Price: Low to High', value: 'price_asc', emoji: '📉' },
+    { label: 'Price: High to Low', value: 'price_desc', emoji: '📈' },
   ];
 
   const [refreshing, setRefreshing] = useState(false);
@@ -441,6 +492,44 @@ export default function CustomerHome() {
             </TouchableOpacity>
           ))}
         </ScrollView>
+        
+        {/* Duration Filter Pills */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterContent}>
+          {durationTabs.map(tab => (
+            <TouchableOpacity key={tab.value} style={[styles.pill, durationFilter === tab.value && styles.pillActive]} onPress={() => setDurationFilter(tab.value)}>
+              <Text style={styles.pillEmoji}>{tab.emoji}</Text>
+              <Text style={[styles.pillText, durationFilter === tab.value && styles.pillTextActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        
+        {/* Delivery Filter Pills */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterContent}>
+          {deliveryTabs.map(tab => (
+            <TouchableOpacity key={tab.value} style={[styles.pill, deliveryFilter === tab.value && styles.pillActive]} onPress={() => setDeliveryFilter(tab.value)}>
+              <Text style={styles.pillEmoji}>{tab.emoji}</Text>
+              <Text style={[styles.pillText, deliveryFilter === tab.value && styles.pillTextActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        
+        {/* Sort Pills */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterContent}>
+          {sortTabs.map(tab => (
+            <TouchableOpacity key={tab.value} style={[styles.pill, sortOption === tab.value && styles.pillActive]} onPress={() => setSortOption(tab.value)}>
+              <Text style={styles.pillEmoji}>{tab.emoji}</Text>
+              <Text style={[styles.pillText, sortOption === tab.value && styles.pillTextActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        
+        {/* Favourites Filter */}
+        <View style={{ marginBottom: 16 }}>
+          <TouchableOpacity style={[styles.pill, showFavourites && styles.pillActive, { alignSelf: 'flex-start' }]} onPress={() => setShowFavourites(!showFavourites)}>
+            <Text style={styles.pillEmoji}>❤️</Text>
+            <Text style={[styles.pillText, showFavourites && styles.pillTextActive]}>My Favourites</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Section Title */}
         <View style={styles.sectionHeader}>
@@ -476,7 +565,7 @@ export default function CustomerHome() {
         )}
 
         {/* Plan Cards */}
-        {filtered.map((plan: any) => <PlanCard key={plan.id} plan={plan} profile={profile} onSubscribe={() => {
+        {filtered.map((plan: any) => <PlanCard key={plan.id} plan={plan} profile={profile} isFavourite={favourites.includes(plan.id)} onToggleFavourite={() => toggleFavourite(plan.id)} onSubscribe={() => {
           router.navigate(`/(customer)/plan/${plan.id}`);
         }} />)}
         <View style={{ height: 20 }} />
@@ -485,7 +574,7 @@ export default function CustomerHome() {
   );
 }
 
-function PlanCard({ plan, profile, onSubscribe }: { plan: any, profile: any, onSubscribe: () => void }) {
+function PlanCard({ plan, profile, isFavourite, onToggleFavourite, onSubscribe }: { plan: any, profile: any, isFavourite: boolean, onToggleFavourite: () => void, onSubscribe: () => void }) {
   const isVeg = plan.diet_type === 'veg' || plan.diet_type === 'vegan';
   const dietColor = isVeg ? '#16A34A' : '#DC2626';
   const dietBg = isVeg ? '#F0FDF4' : '#FEF2F2';
@@ -499,6 +588,9 @@ function PlanCard({ plan, profile, onSubscribe }: { plan: any, profile: any, onS
           <Text style={styles.kitchenName}>{plan.kitchen?.name}</Text>
           <Text style={styles.kitchenAddress} numberOfLines={1}>{plan.kitchen?.address}</Text>
         </View>
+        <TouchableOpacity onPress={onToggleFavourite} style={{ padding: 8 }}>
+          <Text style={{ fontSize: 24 }}>{isFavourite ? '❤️' : '🤍'}</Text>
+        </TouchableOpacity>
         <View style={[styles.dietBadge, { backgroundColor: dietBg }]}>
           <Text style={[styles.dietBadgeText, { color: dietColor }]}>{plan.diet_type.toUpperCase()}</Text>
         </View>

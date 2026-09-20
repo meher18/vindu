@@ -39,6 +39,35 @@ export default function WalletScreen() {
     enabled: !!wallet?.id,
   });
 
+  
+  const { data: hasPremium, refetch: refetchPremium } = useQuery({
+    queryKey: ['premium-status', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('customer_subscriptions')
+        .select('id')
+        .eq('customer_id', user!.id)
+        .eq('premium_unlocked', true)
+        .limit(1);
+      if (error) throw error;
+      return data && data.length > 0;
+    },
+    enabled: !!user?.id,
+  });
+
+  const purchasePremium = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc('purchase_premium', { p_amount: 99 });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['premium-status'] });
+      queryClient.invalidateQueries({ queryKey: ['my-wallet'] });
+      Alert.alert('Success', 'Premium purchased successfully!');
+    },
+    onError: (err: any) => Alert.alert('Purchase Failed', err.message)
+  });
+
   const txReady = !walletLoading && !!wallet?.id;
   const isLoading = walletLoading;
 
@@ -58,7 +87,7 @@ export default function WalletScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchWallet(), refetchTx()]);
+    await Promise.all([refetchWallet(), refetchTx(), refetchPremium()]);
     setRefreshing(false);
   }, [refetchWallet, refetchTx]);
 
@@ -93,6 +122,41 @@ export default function WalletScreen() {
             ))}
           </View>
         </View>
+
+        
+        {/* Premium Section */}
+        {hasPremium ? (
+          <View style={{ backgroundColor: '#F0FDF4', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#86EFAC', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Text style={{ fontSize: 24 }}>✅</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#166534' }}>Premium Active</Text>
+              <Text style={{ fontSize: 13, color: '#15803D', marginTop: 2 }}>Flexi Skip Unlocked</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={{ backgroundColor: '#FFF', borderRadius: 20, padding: 20, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <Text style={{ fontSize: 28 }}>🔓</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#1A1A2E' }}>Unlock Flexi Skip — ₹99</Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 14, color: '#6B7280', marginBottom: 16, lineHeight: 20 }}>
+              Skip up to 5 meals per plan. Credits refunded instantly to your wallet.
+            </Text>
+            <TouchableOpacity 
+              style={{ backgroundColor: '#1A1A2E', paddingVertical: 14, borderRadius: 12, alignItems: 'center' }}
+              onPress={() => purchasePremium.mutate()}
+              disabled={purchasePremium.isPending}
+            >
+              {purchasePremium.isPending ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 15 }}>Buy Premium</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Info Grid */}
         <View style={styles.infoGrid}>
