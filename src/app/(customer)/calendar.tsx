@@ -76,15 +76,13 @@ export default function CalendarScreen() {
   });
 
   const { data: skips, isLoading: isLoadingSkips, refetch: refetchSkips, isRefetching: isRefetchingSkips } = useQuery({
-    queryKey: ['skips', year, month, subIds],
+    queryKey: ['skips', subIds],
     queryFn: async () => {
       if (subIds.length === 0) return [];
       const { data, error } = await supabase
         .from('skips')
         .select('*')
-        .in('customer_subscription_id', subIds)
-        .gte('date', startDateStr)
-        .lte('date', endDateStr);
+        .in('customer_subscription_id', subIds);
       
       if (error) throw error;
       return data;
@@ -237,17 +235,26 @@ export default function CalendarScreen() {
             </View>
           ) : dateStr >= todayStr ? (
             hasPremium ? (
-              <TouchableOpacity 
-                style={{ backgroundColor: '#FEF2F2', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#FEE2E2' }}
-                onPress={() => handleSkip(cs.id, dateStr, sub?.price_per_day || 0)}
-                disabled={skipMutation.isPending}
-              >
-                <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 14 }}>⏭ Skip This Day</Text>
-              </TouchableOpacity>
+              <View>
+                <TouchableOpacity 
+                  style={{ backgroundColor: '#FEF2F2', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#FEE2E2', marginBottom: 8 }}
+                  onPress={() => handleSkip(cs.id, dateStr, sub?.price_per_day || 0)}
+                  disabled={skipMutation.isPending}
+                >
+                  <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 14 }}>⏭ Skip This Day</Text>
+                </TouchableOpacity>
+                <Text style={{ fontSize: 12, color: '#6B7280', textAlign: 'center' }}>
+                  {(() => {
+                    const limit = sub.duration_type === 'daily' ? 5 : sub.duration_type === 'weekly' ? 7 : sub.duration_type === 'monthly' ? 30 : 0;
+                    const used = skips?.filter((s: any) => s.customer_subscription_id === cs.id).length || 0;
+                    return `Flexi Skips used: ${used} of ${limit}`;
+                  })()}
+                </Text>
+              </View>
             ) : (
               <TouchableOpacity 
                 style={{ backgroundColor: '#FFF7ED', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#FED7AA' }}
-                onPress={() => Alert.alert('Premium Feature 🔒', 'Skip deliveries with Flexi Skip — a one-time Premium unlock. Coming soon with Razorpay integration.')}
+                onPress={() => Alert.alert('Premium Feature 🔒', 'Skip deliveries with Flexi Skip — a one-time Premium unlock.')}
               >
                 <Text style={{ color: '#C2410C', fontWeight: '700', fontSize: 14 }}>🔒 Skip This Day (Premium)</Text>
               </TouchableOpacity>
