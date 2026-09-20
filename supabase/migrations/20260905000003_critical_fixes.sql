@@ -4,12 +4,6 @@
 
 -- ------------------------------------------------------------------------------
 -- 1. FIX ORPHANED CANCELLATION TRIGGER (Double-Refund Exploit)
--- ------------------------------------------------------------------------------
--- The trigger was still pointing to process_wallet_refund_on_cancellation
-DROP TRIGGER IF EXISTS on_customer_subscription_cancelled ON public.customer_subscriptions;
-CREATE TRIGGER on_customer_subscription_cancelled
-  BEFORE UPDATE ON public.customer_subscriptions
-  FOR EACH ROW EXECUTE PROCEDURE process_subscription_cancellation_refund();
 
 -- ------------------------------------------------------------------------------
 -- 2. WALLET NON-NEGATIVE CONSTRAINT
@@ -229,6 +223,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+
+
+DROP TRIGGER IF EXISTS on_customer_subscription_cancelled ON public.customer_subscriptions;
+CREATE TRIGGER on_customer_subscription_cancelled
+  BEFORE UPDATE ON public.customer_subscriptions
+  FOR EACH ROW EXECUTE PROCEDURE process_subscription_cancellation_refund();
 
 -- ------------------------------------------------------------------------------
 -- 5. FIX BACK-TO-BACK RENEWAL OVERLAP
