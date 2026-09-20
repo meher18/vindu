@@ -18,6 +18,7 @@ async function runTest() {
   // 1. SIGNUPS (Simulating the 4 Personas)
   console.log("👤 Creating 4 Sandbox Personas...");
   const { data: aData, error: aErr } = await adminClient.auth.signUp({ email: `admin_${timestamp}@example.com`, password: 'password123', options: { data: { requested_role: 'admin' } }});
+  console.log("aData:", aData, "aErr:", aErr);
   if (aErr) throw new Error("Admin signup failed. (If rate limited, use local supabase or disable rate limits): " + aErr.message);
   
   const { data: vData, error: vErr } = await vendorClient.auth.signUp({ email: `vendor_${timestamp}@example.com`, password: 'password123', options: { data: { requested_role: 'vendor' } }});
@@ -37,7 +38,8 @@ async function runTest() {
   if (res.error) throw new Error("Admin Bootstrap Failed: " + JSON.stringify(res.error));
   
   res = await adminClient.from('profiles').select('role').eq('id', aData.user.id).single();
-  if (res.data.role !== 'admin') throw new Error("Admin Role not assigned.");
+  console.log("Profile fetch res:", res);
+  if (!res.data || res.data.role !== 'admin') throw new Error("Admin Role not assigned.");
   console.log("✅ Admin Bootstrapped Successfully.");
 
   // 3. VENDOR CREATION & ADMIN APPROVAL
